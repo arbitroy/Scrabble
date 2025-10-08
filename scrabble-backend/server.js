@@ -287,12 +287,15 @@ class ScrabbleGame {
             return { success: false, error: validation.error };
         }
 
+        // IMPORTANT: Calculate score BEFORE placing tiles on board
+        const score = this.calculateScore(playedTiles);
+
+        // NOW place the tiles on the board
         for (let i = 0; i < playedTiles.length; i++) {
             const pt = playedTiles[i];
             this.board[pt.row][pt.col] = pt.tile;
         }
 
-        const score = this.calculateScore(playedTiles);
         player.score += score;
 
         const playedTileIds = new Set(playedTiles.map(pt => pt.tile.id));
@@ -305,6 +308,7 @@ class ScrabbleGame {
 
         return { success: true, score: score };
     }
+
 
     passTurn(playerId) {
         const player = this.players.find(p => p.id === playerId);
