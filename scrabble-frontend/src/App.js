@@ -2,12 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
 
 const PREMIUM_SQUARES = {
-  TW: [[0,0], [0,7], [0,14], [7,0], [7,14], [14,0], [14,7], [14,14]],
-  DW: [[1,1], [2,2], [3,3], [4,4], [1,13], [2,12], [3,11], [4,10], 
-       [13,1], [12,2], [11,3], [10,4], [13,13], [12,12], [11,11], [10,10], [7,7]],
-  TL: [[1,5], [1,9], [5,1], [5,5], [5,9], [5,13], [9,1], [9,5], [9,9], [9,13], [13,5], [13,9]],
-  DL: [[0,3], [0,11], [2,6], [2,8], [3,0], [3,7], [3,14], [6,2], [6,6], [6,8], [6,12], 
-       [7,3], [7,11], [8,2], [8,6], [8,8], [8,12], [11,0], [11,7], [11,14], [12,6], [12,8], [14,3], [14,11]]
+  TW: [[0, 0], [0, 7], [0, 14], [7, 0], [7, 14], [14, 0], [14, 7], [14, 14]],
+  DW: [[1, 1], [2, 2], [3, 3], [4, 4], [1, 13], [2, 12], [3, 11], [4, 10],
+  [13, 1], [12, 2], [11, 3], [10, 4], [13, 13], [12, 12], [11, 11], [10, 10], [7, 7]],
+  TL: [[1, 5], [1, 9], [5, 1], [5, 5], [5, 9], [5, 13], [9, 1], [9, 5], [9, 9], [9, 13], [13, 5], [13, 9]],
+  DL: [[0, 3], [0, 11], [2, 6], [2, 8], [3, 0], [3, 7], [3, 14], [6, 2], [6, 6], [6, 8], [6, 12],
+  [7, 3], [7, 11], [8, 2], [8, 6], [8, 8], [8, 12], [11, 0], [11, 7], [11, 14], [12, 6], [12, 8], [14, 3], [14, 11]]
 };
 
 const getPremiumType = (row, col) => {
@@ -71,24 +71,43 @@ export default function ScrabbleGame() {
 
     newSocket.on('moveCompleted', ({ playerId: movedPlayerId, score }) => {
       const player = gameState?.players.find(p => p.id === movedPlayerId);
-      setChatMessages(prev => [...prev, { 
-        playerName: 'System', 
-        message: `${player?.name || 'Player'} scored ${score} points!`, 
-        timestamp: Date.now() 
+      setChatMessages(prev => [...prev, {
+        playerName: 'System',
+        message: `${player?.name || 'Player'} scored ${score} points!`,
+        timestamp: Date.now()
       }]);
+
+      // Clear your own placements after successful move
+      if (movedPlayerId === playerId) {
+        setBoardPlacements({});
+      }
     });
 
     newSocket.on('playerPassed', ({ playerId: passedPlayerId }) => {
       const player = gameState?.players.find(p => p.id === passedPlayerId);
-      setChatMessages(prev => [...prev, { 
-        playerName: 'System', 
-        message: `${player?.name || 'Player'} passed their turn`, 
-        timestamp: Date.now() 
+      setChatMessages(prev => [...prev, {
+        playerName: 'System',
+        message: `${player?.name || 'Player'} passed their turn`,
+        timestamp: Date.now()
       }]);
     });
 
     return () => newSocket.close();
   }, []);
+
+
+
+useEffect(() => {
+  // Clear board placements when it's not our turn
+  if (gameState && gameState.gameStarted) {
+    const isMyTurn = gameState.players[gameState.currentPlayerIndex]?.id === playerId;
+    
+    if (!isMyTurn && Object.keys(boardPlacements).length > 0) {
+      // Just discard the placements - server is the source of truth for our tiles
+      setBoardPlacements({});
+    }
+  }
+}, [gameState?.currentPlayerIndex, playerId]);
 
   const createRoom = () => {
     if (!playerName.trim() || !roomId.trim()) {
@@ -127,7 +146,7 @@ export default function ScrabbleGame() {
     if (!draggedTile) return;
 
     const key = `${row}-${col}`;
-    
+
     // Check if square is already occupied
     if (gameState.board[row][col] || boardPlacements[key]) return;
 
@@ -139,8 +158,8 @@ export default function ScrabbleGame() {
       }));
       setPlayerTiles(prev => prev.filter(t => t.id !== draggedTile.tile.id));
     }
-    // If from board, move placement
-    else if (draggedTile.source === 'board') {
+    // If from board (source will be a position key like "7-7"), move placement
+    else {
       const newPlacements = { ...boardPlacements };
       delete newPlacements[draggedTile.source];
       newPlacements[key] = { row, col, tile: draggedTile.tile };
@@ -149,7 +168,6 @@ export default function ScrabbleGame() {
 
     setDraggedTile(null);
   };
-
   const handleDropOnRack = (e) => {
     e.preventDefault();
     if (!draggedTile || draggedTile.source === 'rack') return;
@@ -170,11 +188,10 @@ export default function ScrabbleGame() {
       return;
     }
 
-    socket.emit('playMove', { 
-      roomId: gameState.roomId, 
-      playedTiles 
+    socket.emit('playMove', {
+      roomId: gameState.roomId,
+      playedTiles
     });
-    setBoardPlacements({});
   };
 
   const passTurn = () => {
@@ -200,8 +217,8 @@ export default function ScrabbleGame() {
   const sendChat = () => {
     if (!chatInput.trim()) return;
     const player = gameState?.players.find(p => p.id === playerId);
-    socket.emit('chatMessage', { 
-      roomId: gameState.roomId, 
+    socket.emit('chatMessage', {
+      roomId: gameState.roomId,
       message: chatInput,
       playerName: player?.name || 'Unknown'
     });
@@ -300,7 +317,7 @@ export default function ScrabbleGame() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <div className="max-w-7xl mx-auto">
         <h1 className="text-4xl font-bold text-center mb-6 text-indigo-700">Scrabble Online</h1>
-        
+
         {errorMessage && (
           <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-center">
             {errorMessage}
@@ -312,13 +329,12 @@ export default function ScrabbleGame() {
           <div className="bg-white rounded-lg shadow-lg p-4">
             <h2 className="text-xl font-bold mb-4">Players</h2>
             {gameState.players.map((player, idx) => (
-              <div 
-                key={player.id} 
-                className={`p-3 rounded-lg mb-2 ${
-                  idx === gameState.currentPlayerIndex 
-                    ? 'bg-green-100 border-2 border-green-500' 
-                    : 'bg-gray-50'
-                } ${player.id === playerId ? 'ring-2 ring-indigo-500' : ''}`}
+              <div
+                key={player.id}
+                className={`p-3 rounded-lg mb-2 ${idx === gameState.currentPlayerIndex
+                  ? 'bg-green-100 border-2 border-green-500'
+                  : 'bg-gray-50'
+                  } ${player.id === playerId ? 'ring-2 ring-indigo-500' : ''}`}
               >
                 <div className="font-semibold">{player.name}</div>
                 <div className="text-sm text-gray-600">Score: {player.score}</div>
@@ -348,7 +364,7 @@ export default function ScrabbleGame() {
 
                     let bgColor = 'bg-amber-50';
                     let label = '';
-                    
+
                     if (!existingTile) {
                       if (premium === 'TW') {
                         bgColor = 'bg-red-500 text-white';
@@ -377,7 +393,7 @@ export default function ScrabbleGame() {
                           <div
                             draggable={!!placedTile}
                             onDragStart={(e) => placedTile && handleDragStart(e, placedTile.tile, key)}
-                            className={`w-full h-full ${placedTile ? 'bg-yellow-200' : 'bg-amber-100'} border-2 border-amber-900 flex flex-col items-center justify-center cursor-move font-bold`}
+                            className={`w-full h-full ${placedTile ? 'bg-yellow-200' : 'bg-amber-100'} border-2 border-amber-900 flex flex-col items-center justify-center cursor-move font-bold text-gray-900`}
                           >
                             <span className="text-sm">{(placedTile?.tile.letter || existingTile?.letter)}</span>
                             <span className="text-[8px]">{(placedTile?.tile.value || existingTile?.value)}</span>
